@@ -112,6 +112,15 @@ public class McpCatalogue {
         return usable;
     }
 
+    /**
+     * All configured connections, ignoring the master switch and per-server toggles.
+     * Used by the developer assistant ({@code /api/help}) which always needs git tools
+     * regardless of whether the chat UI's MCP panel is on.
+     */
+    public List<McpSyncClient> allConnections() {
+        return clients.getIfAvailable(List::of);
+    }
+
 
     /** Moves the master switch and returns where it landed. */
     public boolean toggle() {
@@ -232,7 +241,7 @@ public class McpCatalogue {
      * {@code "<client name> - <connection key>"}, so the tail of it is the key from
      * {@code application.yml} and is known before the server has said anything about itself.
      */
-    static String label(McpSyncClient client) {
+    public static String label(McpSyncClient client) {
         McpSchema.Implementation info = client.getClientInfo();
         String name = (info == null) ? "" : text(info.name());
         int dash = name.lastIndexOf(" - ");

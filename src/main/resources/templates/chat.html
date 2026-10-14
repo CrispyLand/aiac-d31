@@ -489,6 +489,7 @@
                 class="pchip" th:classappend="${llmProvider.name() == 'CEREBRAS'} ? 'active' : ''">Cerebras</button>
         <button type="submit" form="providerForm" name="provider" value="OLLAMA"
                 class="pchip" th:classappend="${llmProvider.name() == 'OLLAMA'} ? 'active' : ''">Ollama</button>
+        <span id="queue-badge" class="pbadge" style="display:none; background:#451a03; color:#f59e0b; border:1px solid #d97706; font-size:10px;"></span>
     </div>
 
     <!-- The memory model, stated on the page rather than buried in the code. These are not modes
@@ -1594,6 +1595,33 @@
     // Auto-scroll chat to the latest message — runs AFTER the RAG formatter
     // has rewritten the DOM, so scrollHeight reflects the final content.
     if (stream) stream.scrollTop = stream.scrollHeight;
+
+    // Day 30 — Ollama queue badge: poll every 3s when Ollama is active
+    (function() {
+        const badge = document.getElementById('queue-badge');
+        if (!badge) return;
+        function pollQueue() {
+            fetch('/ollama/queue')
+                .then(r => r.json())
+                .then(d => {
+                    if (d.active && d.size > 0) {
+                        badge.textContent = 'Queue: ' + d.size + '/' + d.max;
+                        badge.style.display = 'inline-block';
+                    } else if (d.active) {
+                        badge.textContent = 'Queue: idle';
+                        badge.style.display = 'inline-block';
+                        badge.style.background = '#064e3b';
+                        badge.style.color = '#6ee7b7';
+                        badge.style.borderColor = '#059669';
+                    } else {
+                        badge.style.display = 'none';
+                    }
+                })
+                .catch(() => { badge.style.display = 'none'; });
+        }
+        pollQueue();
+        setInterval(pollQueue, 3000);
+    })();
 </script>
 </body>
 </html>

@@ -43,6 +43,12 @@ WEATHER_JAR="$ROOT/weather-server/target/weather-server-0.0.1-SNAPSHOT.jar"
 echo "==> Creating directories on VPS..."
 vssh "$VPS" "mkdir -p /opt/aiac/mcp/data /opt/aiac/agent/data /opt/aiac/agent/profiles /opt/aiac/notes /opt/aiac/weather"
 
+# ── 2b. Sync git repo for MCP git tools ───────────────────────────────────────
+echo "==> Syncing git repo to VPS..."
+vrsync -a --delete --exclude='target/' --exclude='.idea/' --exclude='*.jar' \
+    --exclude='.google-tokens/' --exclude='data/' \
+    "$ROOT/" "$VPS:/opt/aiac/repo/"
+
 # ── 3. Install nginx (idempotent) ─────────────────────────────────────────────
 echo "==> Ensuring nginx is installed..."
 vssh "$VPS" "which nginx > /dev/null 2>&1 || sudo apt-get install -y nginx"
@@ -122,7 +128,21 @@ vssh "$VPS" "
 echo "==> Restarting agent..."
 vssh "$VPS" "sudo systemctl restart aiac-agent"
 
-# ── 10. Status ────────────────────────────────────────────────────────────────
+echo "==> Waiting for agent to be ready..."
+for i in $(seq 1 20); do
+    if curl -s -o /dev/null -w '%{http_code}' http://2.28.124.111/ 2>/dev/null | grep -q 200; then
+        echo "Agent is up."
+        break
+    fi
+    echo "  attempt $i/20..."
+    sleep 3
+done
+
+# ── 10. Reindex RAG (runs in background on the server) ────────────────────────
+echo "==> Triggering RAG reindex..."
+curl -s -X POST http://2.28.124.111/indexer/reindex -o /dev/null -w 'HTTP %{http_code}\n'
+
+# ── 12. Status ────────────────────────────────────────────────────────────────
 echo ""
 echo "==> Done. Services:"
 vssh "$VPS" "sudo systemctl status aiac-mcp aiac-weather aiac-agent --no-pager -l | grep -E 'Loaded|Active|Main PID'"

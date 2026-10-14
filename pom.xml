@@ -179,6 +179,24 @@
 							</resources>
 						</configuration>
 					</execution>
+					<execution>
+						<id>copy-project-docs</id>
+						<phase>generate-resources</phase>
+						<goals><goal>copy-resources</goal></goals>
+						<configuration>
+							<outputDirectory>${project.build.outputDirectory}/docs/project</outputDirectory>
+							<resources>
+								<resource>
+									<directory>${project.basedir}</directory>
+									<includes>
+										<include>README.md</include>
+										<include>CLAUDE.md</include>
+										<include>docs/**/*.md</include>
+									</includes>
+								</resource>
+							</resources>
+						</configuration>
+					</execution>
 				</executions>
 			</plugin>
 		</plugins>

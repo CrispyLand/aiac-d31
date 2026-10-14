@@ -42,11 +42,15 @@ import java.util.List;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.validation.BindingResult;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.ResponseBody;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
+import com.crispyland.telegram.OllamaQueue;
 
 /**
  * Thin by design: render the page, turn form fields into an AgentConfig, call the agent,
@@ -68,13 +72,15 @@ public class ChatController {
     private final RagState ragState;
     private final RagSearcher ragSearcher;
     private final RagProperties ragProperties;
+    private final OllamaQueue ollamaQueue;   // nullable — only exists when Ollama is enabled
 
     public ChatController(Agent agent, AgentProperties properties, LlmClient llmClient,
                           ConversationIdResolver conversationIds, Branches branches,
                           LongTermStore longTerm, Profiles profiles, PersonaSelector personas,
                           ActiveProfile activeProfile,
                           RagState ragState, RagSearcher ragSearcher,
-                          RagProperties ragProperties) {
+                          RagProperties ragProperties,
+                          @Autowired(required = false) OllamaQueue ollamaQueue) {
         this.agent = agent;
         this.properties = properties;
         this.llmClient = llmClient;
@@ -84,6 +90,7 @@ public class ChatController {
         this.profiles = profiles;
         this.personas = personas;
         this.activeProfile = activeProfile;
+        this.ollamaQueue = ollamaQueue;
         this.ragState = ragState;
         this.ragSearcher = ragSearcher;
         this.ragProperties = ragProperties;
@@ -388,6 +395,22 @@ public class ChatController {
         return "redirect:/";
     }
 
+    /** Day 30 — Ollama queue status for the chat UI. */
+    @GetMapping("/ollama/queue")
+    @ResponseBody
+    public ResponseEntity<java.util.Map<String, Object>> queueStatus() {
+        if (ollamaQueue == null) {
+            return ResponseEntity.ok(java.util.Map.of("enabled", false));
+        }
+        boolean isOllama = llmClient instanceof LlmProviderSwitch sw
+                && sw.activeProvider() == LlmProviderSwitch.Provider.OLLAMA;
+        return ResponseEntity.ok(java.util.Map.of(
+                "enabled", true,
+                "active", isOllama,
+                "size", ollamaQueue.queueSize(),
+                "max", ollamaQueue.maxQueueSize()));
+    }
+
     /** Who is asking and which of their branches is open — resolved once per request. */
     private MemoryScope scope(HttpServletRequest request, HttpServletResponse response) {
         // Resolving here also mints the cookie for a first-time visitor, before they send anything.
@@ -588,6 +611,8 @@ public class ChatController {
         } else {
             model.addAttribute("models", properties.availableModels());
         }
+        model.addAttribute("ollamaActive", llmClient instanceof LlmProviderSwitch sw
+                && sw.activeProvider() == LlmProviderSwitch.Provider.OLLAMA);
         model.addAttribute("reasoningEfforts", properties.reasoningEfforts());
         model.addAttribute("layers", MemoryLayer.values());
         model.addAttribute("longTermKinds", LongTermKind.values());

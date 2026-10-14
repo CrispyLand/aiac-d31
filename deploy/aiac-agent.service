@@ -1,10 +1,11 @@
 [Unit]
 Description=AIAC Agent (chat UI)
-After=network.target aiac-mcp.service aiac-weather.service
+After=network.target aiac-mcp.service aiac-weather.service ollama.service
 # A soft dependency: the agent starts even if an MCP server failed, because a missing tool is
 # better than no chat page. The hard constraint is ordering — both servers must have their ports
 # open before the agent's MCP client dials them.
-Wants=aiac-mcp.service aiac-weather.service
+# Ollama must be up before the Telegram bot starts polling.
+Wants=aiac-mcp.service aiac-weather.service ollama.service
 
 [Service]
 Type=simple
@@ -17,6 +18,12 @@ EnvironmentFile=/opt/aiac/.env
 
 # Bind to loopback — nginx terminates the public connection on port 80 and proxies here.
 Environment="SERVER_ADDRESS=127.0.0.1"
+
+# Day 30 — enable the Telegram bot on VPS (disabled locally).
+Environment="TELEGRAM_BOT_ENABLED=true"
+
+# VPS has qwen2.5:0.5b, not llama3.2:3b (Mac-only).
+Environment="AGENT_OLLAMA_MODEL=qwen2.5:0.5b"
 
 ExecStart=/usr/bin/java -jar /opt/aiac/agent/agent.jar
 

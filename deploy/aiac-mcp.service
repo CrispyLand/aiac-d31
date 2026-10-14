@@ -31,6 +31,7 @@ Environment="GOOGLE_TIME_ZONE=Asia/Shanghai"
 # same box should be able to reach the admin API.
 Environment="SERVER_ADDRESS=127.0.0.1"
 Environment="NOTES_DIRECTORY=/opt/aiac/notes"
+Environment="GIT_REPO_DIR=/opt/aiac/repo"
 
 # Telegram delivery. Both must be set for notifications to fire; either missing is a no-op.
 # Add to /opt/aiac/.env:

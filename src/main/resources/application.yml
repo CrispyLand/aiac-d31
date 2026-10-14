@@ -76,6 +76,26 @@ telegram:
   bot-token: ${TELEGRAM_BOT_TOKEN}
   chat-id: ${TELEGRAM_CHAT_ID}
 
+  # Day 30 — Telegram bot as a private AI service.
+  # Uses Ollama directly (not the web UI's provider switch).
+  bot:
+    enabled: false                                  # enable on VPS only
+    token: ${TELEGRAM_BOT_TOKEN:}
+    model: qwen2.5:0.5b                             # small model for VPS (4GB RAM)
+    admin-user-ids:                                  # admin = the owner's chat ID
+      - "${TELEGRAM_CHAT_ID:0}"
+    allow-all: false                                # beta mode: only admin-user-ids
+    max-queue-size: 5
+    rate-limit-per-minute: 3
+    rate-limit-per-day: 30
+    max-input-length: 500
+    max-output-tokens: 400
+    timeout-seconds: 120
+    blocked-user-ids: []
+    system-prompt: >
+      You are a concise, helpful AI assistant running on a private server.
+      Answer directly and keep responses short. If you don't know, say so.
+
 # ---------------------------------------------------------------------------
 # Everything the agent does is tunable from here. The page may override any of
 # the `defaults` per request; whatever it leaves empty falls back to these.

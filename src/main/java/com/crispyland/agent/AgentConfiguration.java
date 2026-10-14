@@ -1,6 +1,7 @@
 package com.crispyland.agent;
 
 import com.crispyland.briefing.BriefingClient;
+import com.crispyland.telegram.OllamaQueue;
 import com.crispyland.agent.judge.Judge;
 import com.crispyland.agent.judge.NoOpJudge;
 import com.crispyland.agent.llm.CerebrasLlmClient;
@@ -32,7 +33,10 @@ import com.crispyland.agent.usage.TemplateOverhead;
 import com.crispyland.agent.usage.TokenCounter;
 import com.crispyland.agent.usage.TokenUsageTracker;
 import java.nio.file.Path;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.context.annotation.Primary;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.client.JdkClientHttpRequestFactory;
@@ -48,8 +52,10 @@ import tools.jackson.databind.json.JsonMapper;
 public class AgentConfiguration {
 
     @Bean
+    @Primary
     @ConditionalOnMissingBean
-    public LlmClient llmClient(AgentProperties properties) {
+    public LlmClient llmClient(AgentProperties properties,
+                                @Autowired(required = false) OllamaQueue ollamaQueue) {
         ObjectMapper mapper = JsonMapper.builder().build();
 
         // Cerebras client (cloud)
@@ -59,18 +65,33 @@ public class AgentConfiguration {
         CerebrasLlmClient cerebrasClient = new CerebrasLlmClient(
                 cerebrasRest, mapper, properties.endpoint(), properties.apiKey());
 
-        // If Ollama is enabled, wrap both in a provider switch
-        AgentProperties.Ollama ollama = properties.ollama();
-        if (ollama != null && ollama.enabled()) {
-            JdkClientHttpRequestFactory ollamaFactory = new JdkClientHttpRequestFactory();
-            ollamaFactory.setReadTimeout(ollama.readTimeout());
-            RestClient ollamaRest = RestClient.builder().requestFactory(ollamaFactory).build();
-            CerebrasLlmClient ollamaClient = new CerebrasLlmClient(
-                    ollamaRest, mapper, ollama.endpoint(), "ollama");
-            return new LlmProviderSwitch(cerebrasClient, ollamaClient, ollama.model());
+        // If Ollama is enabled, wrap both in a provider switch.
+        // The Ollama client goes through OllamaQueue so web UI and Telegram bot
+        // share a single serialized queue (Ollama handles one request at a time).
+        if (ollamaQueue != null) {
+            AgentProperties.Ollama ollama = properties.ollama();
+            return new LlmProviderSwitch(cerebrasClient, ollamaQueue, ollama.model());
         }
 
         return cerebrasClient;
+    }
+
+    /**
+     * Day 30 — shared Ollama request queue. Both the web UI (via LlmProviderSwitch) and
+     * the Telegram bot route through this. Created only when Ollama is enabled.
+     */
+    @Bean
+    @ConditionalOnMissingBean
+    @ConditionalOnProperty(name = "agent.ollama.enabled", havingValue = "true")
+    public OllamaQueue ollamaQueue(AgentProperties properties) {
+        AgentProperties.Ollama ollama = properties.ollama();
+        ObjectMapper mapper = JsonMapper.builder().build();
+        JdkClientHttpRequestFactory ollamaFactory = new JdkClientHttpRequestFactory();
+        ollamaFactory.setReadTimeout(ollama.readTimeout());
+        RestClient ollamaRest = RestClient.builder().requestFactory(ollamaFactory).build();
+        CerebrasLlmClient ollamaClient = new CerebrasLlmClient(
+                ollamaRest, mapper, ollama.endpoint(), "ollama");
+        return new OllamaQueue(ollamaClient, 5);
     }
 
     /**

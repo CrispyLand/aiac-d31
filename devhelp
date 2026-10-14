@@ -1,0 +1,60 @@
+#!/usr/bin/env bash
+# devhelp — CLI coding assistant for the AIAC project.
+# Uses Cerebras gpt-oss-120b with RAG context from the codebase index.
+#
+# Usage:
+#   ./devhelp "How does the RAG pipeline work?"
+#   ./devhelp "What MCP tools are available?"
+#   echo "explain IndexBuilder" | ./devhelp
+#
+# The Spring Boot app must be running (mvn spring-boot:run or on VPS).
+
+set -euo pipefail
+
+HOST="${DEVHELP_HOST:-http://localhost:8080}"
+
+# Read question from args or stdin
+if [ $# -gt 0 ]; then
+    QUESTION="$*"
+elif [ ! -t 0 ]; then
+    QUESTION=$(cat)
+else
+    echo "Usage: devhelp <question>"
+    echo "       echo 'question' | devhelp"
+    exit 1
+fi
+
+if [ -z "$QUESTION" ]; then
+    echo "Error: empty question" >&2
+    exit 1
+fi
+
+# Escape for JSON
+JSON_QUESTION=$(printf '%s' "$QUESTION" | python3 -c 'import sys,json; print(json.dumps(sys.stdin.read()))')
+
+RESPONSE=$(curl -s "${HOST}/api/help" \
+    -H 'Content-Type: application/json' \
+    -d "{\"question\": ${JSON_QUESTION}}")
+
+# Check for errors
+ERROR=$(echo "$RESPONSE" | python3 -c 'import sys,json; d=json.load(sys.stdin); print(d.get("error",""))' 2>/dev/null || echo "")
+if [ -n "$ERROR" ]; then
+    echo "Error: $ERROR" >&2
+    exit 1
+fi
+
+# Extract and display
+python3 -c '
+import sys, json
+d = json.load(sys.stdin)
+print(d.get("answer", ""))
+print()
+model = d.get("model", "")
+ms = d.get("latencyMs", 0)
+src = d.get("sourcesUsed", 0)
+tc = d.get("toolCalls", 0)
+pt = d.get("promptTokens", 0)
+ct = d.get("completionTokens", 0)
+tools = f" | {tc} tool calls" if tc else ""
+print(f"--- {model} | {ms}ms | {src} sources{tools} | {pt}+{ct} tokens ---")
+' <<< "$RESPONSE"
