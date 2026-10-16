@@ -334,7 +334,7 @@ rag:
     max-chunk-chars: 1000       # truncate candidate text in the reranker prompt
     max-tokens: 2000            # must cover gpt-oss hidden reasoning + the JSON array
   query-rewrite:
-    enabled: false              # off by default; toggle on the page
+    enabled: true               # rewrite vague questions for better RAG recall
     model: gpt-oss-120b
   evaluation:
     enabled: false              # GET /rag/evaluate is disabled unless true

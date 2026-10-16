@@ -57,19 +57,9 @@ public class HelpController {
     private static final Logger log = LoggerFactory.getLogger(HelpController.class);
     private static final int MAX_TOOL_ROUNDS = 4;
 
-    private static final String SYSTEM_PROMPT = """
+    private static final String SYSTEM_PROMPT_BASE = """
             You are a developer assistant for the AIAC project — a Spring Boot chat agent \
             with MCP tool servers and a RAG pipeline. You have deep knowledge of this codebase.
-
-            You have access to git tools that let you inspect the live repository:
-            - getGitBranch — current branch + recent commits
-            - getGitStatus — modified, added, untracked files
-            - getGitDiff — uncommitted changes (optionally filtered to a file)
-            - getGitFiles — list tracked files (optionally in a subdirectory)
-
-            Use these tools when the question is about the current state of the repo \
-            (branch, changes, status, recent commits). For questions about how the code works, \
-            the codebase context provided below is usually sufficient.
 
             When answering:
             - Be concise and direct
@@ -78,6 +68,14 @@ public class HelpController {
             - If you don't know or the context doesn't cover it, say so honestly
             - Format code snippets with ``` blocks
             - Use markdown formatting for readability
+            - Do NOT hallucinate shell commands or pretend to browse files
+            """;
+
+    private static final String SYSTEM_PROMPT_WITH_TOOLS = SYSTEM_PROMPT_BASE + """
+
+            You also have access to git tools that let you inspect the live repository. \
+            Use them when the question is about the current state of the repo \
+            (branch, changes, status, recent commits).
             """;
 
     private final CerebrasLlmClient cerebras;
@@ -136,20 +134,25 @@ public class HelpController {
         }
 
         try {
-            // Discover MCP tools, bypassing the chat UI's master switch.
-            // When the CLI already sent local git context, filter out MCP git tools
-            // to avoid the model browsing the VPS repo instead of using RAG.
+            // MCP tool strategy:
+            // - CLI (local git context present): no MCP tools at all — local git
+            //   context is already in the prompt, RAG handles code knowledge
+            // - Direct API call (no local context): only git tools, not calendar/weather/etc.
             boolean hasLocalGit = question.contains("Local git state");
             Map<String, McpSyncClient> owners = new LinkedHashMap<>();
-            List<ToolSpec> tools = discoverTools(owners);
+            List<ToolSpec> tools;
             if (hasLocalGit) {
-                tools.removeIf(t -> t.name().startsWith("getGit"));
-                owners.keySet().removeIf(name -> name.startsWith("getGit"));
+                tools = List.of();
+            } else {
+                tools = discoverTools(owners);
+                tools.removeIf(t -> !t.name().startsWith("getGit"));
+                owners.keySet().removeIf(name -> !name.startsWith("getGit"));
             }
 
+            String systemPrompt = tools.isEmpty() ? SYSTEM_PROMPT_BASE : SYSTEM_PROMPT_WITH_TOOLS;
             ChatRequest chatRequest = new ChatRequest(
                     "gpt-oss-120b",
-                    List.of(Message.system(SYSTEM_PROMPT), Message.user(userPrompt)),
+                    List.of(Message.system(systemPrompt), Message.user(userPrompt)),
                     0.0, 2048, "", List.of(), "",
                     tools, List.of());
 

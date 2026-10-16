@@ -23,7 +23,7 @@ vrsync(){ rsync -e "ssh -o ControlPath=$SSH_CTRL" "$@"; }
 # ── 1. Build ──────────────────────────────────────────────────────────────────
 echo "==> Building agent..."
 cd "$ROOT"
-mvn -q package -DskipTests
+mvn -q clean package -DskipTests
 
 echo "==> Building MCP server..."
 cd "$ROOT/mcp-server"
