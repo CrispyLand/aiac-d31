@@ -1,10 +1,12 @@
 #!/usr/bin/env bash
 # devhelp — CLI coding assistant for the AIAC project.
-# Uses Cerebras gpt-oss-120b with RAG context from the codebase index.
+# Uses Cerebras gpt-oss-120b with RAG context from the codebase index
+# and local git context from the current repository.
 #
 # Usage:
 #   ./devhelp "How does the RAG pipeline work?"
-#   ./devhelp "What MCP tools are available?"
+#   ./devhelp "What files did I change?"
+#   ./devhelp "What branch am I on?"
 #   echo "explain IndexBuilder" | ./devhelp
 #
 # The Spring Boot app must be running (mvn spring-boot:run or on VPS).
@@ -29,8 +31,36 @@ if [ -z "$QUESTION" ]; then
     exit 1
 fi
 
+# Gather local git context (if inside a git repo)
+GIT_CONTEXT=""
+if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    GIT_BRANCH=$(git branch --show-current 2>/dev/null || echo "unknown")
+    GIT_STATUS=$(git status --short 2>/dev/null || echo "")
+    GIT_LOG=$(git log --oneline -5 2>/dev/null || echo "")
+    GIT_DIFF_STAT=$(git diff --stat 2>/dev/null || echo "")
+
+    GIT_CONTEXT="
+Local git state (from the developer's machine):
+Branch: ${GIT_BRANCH}
+Recent commits:
+${GIT_LOG}
+Working tree:
+${GIT_STATUS:-clean}
+Changed files:
+${GIT_DIFF_STAT:-no changes}"
+fi
+
+# Build full question with git context
+if [ -n "$GIT_CONTEXT" ]; then
+    FULL_QUESTION="${GIT_CONTEXT}
+
+User question: ${QUESTION}"
+else
+    FULL_QUESTION="$QUESTION"
+fi
+
 # Escape for JSON
-JSON_QUESTION=$(printf '%s' "$QUESTION" | python3 -c 'import sys,json; print(json.dumps(sys.stdin.read()))')
+JSON_QUESTION=$(printf '%s' "$FULL_QUESTION" | python3 -c 'import sys,json; print(json.dumps(sys.stdin.read()))')
 
 RESPONSE=$(curl -s "${HOST}/api/help" \
     -H 'Content-Type: application/json' \

@@ -121,6 +121,8 @@ Tools exposed by the MCP servers:
 
 - Add startup log line showing which Google account the MCP server authorized (makes debugging token issues instant)
 - `saveToFile` still not guaranteed to fire — model sometimes stops after `summarize`; may need stronger enforcement
+- Incremental RAG reindex on deploy — use `git diff --name-only` to find changed files and call `mergeDocument()` for each, instead of re-embedding the whole codebase
+- Multi-project support — namespaced RAG indexes per project, CLI detects project from working directory, web chat needs a project selector
 
 ---
 

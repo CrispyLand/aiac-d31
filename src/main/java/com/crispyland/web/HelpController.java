@@ -136,10 +136,16 @@ public class HelpController {
         }
 
         try {
-            // Discover MCP tools directly, bypassing the chat UI's master switch.
-            // This ensures git tools are always available to the dev assistant.
+            // Discover MCP tools, bypassing the chat UI's master switch.
+            // When the CLI already sent local git context, filter out MCP git tools
+            // to avoid the model browsing the VPS repo instead of using RAG.
+            boolean hasLocalGit = question.contains("Local git state");
             Map<String, McpSyncClient> owners = new LinkedHashMap<>();
             List<ToolSpec> tools = discoverTools(owners);
+            if (hasLocalGit) {
+                tools.removeIf(t -> t.name().startsWith("getGit"));
+                owners.keySet().removeIf(name -> name.startsWith("getGit"));
+            }
 
             ChatRequest chatRequest = new ChatRequest(
                     "gpt-oss-120b",

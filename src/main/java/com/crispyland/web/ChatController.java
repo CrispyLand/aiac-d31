@@ -547,18 +547,18 @@ public class ChatController {
     private String buildRagEmptyPrompt(String question) {
         return "No relevant context was found in the codebase for this question.\n\n"
                 + "User question: " + question + "\n\n"
-                + "IMPORTANT: You MUST respond with:\n\n"
-                + "### Answer\n"
-                + "I don't have enough information in the retrieved context to answer this question. "
-                + "Could you rephrase or ask something more specific?\n\n"
-                + "### Sources\n(none)\n\n### Quotes\n(none)";
+                + "If you have tools available (e.g. git tools), try using them to answer. "
+                + "Otherwise, say you don't have enough information and suggest rephrasing. "
+                + "Answer naturally — do not use the ### Answer / Sources / Quotes format.";
     }
 
     private static final String RAG_FORMAT_INSTRUCTION = """
-            IMPORTANT: Structure your response with these EXACT headings:
+            Answer the question using the codebase context above and any available tools. \
+            If the question asks about live state (current branch, uncommitted changes, \
+            git status), use the git tools rather than describing them from the context. \
+            Use citation markers like [1], [2] to reference codebase sources.
 
-            ### Answer
-            Your concise answer. Use citation markers like [1], [2] to reference sources.
+            At the end of your answer, include:
 
             ### Sources
             List each source you used, one per line:
@@ -571,13 +571,11 @@ public class ChatController {
             Rules:
             - Only cite sources from the provided context above. Do not invent sources.
             - Only quote text that appears word-for-word in the context. Do not paraphrase.
-            - If the context does not contain enough information, say so in the Answer section \
-            and write (none) for Sources and Quotes.
+            - If the context does not contain enough information, say so honestly.
             - If the question is ambiguous or too vague (e.g. "the store" could refer to multiple \
-            things), ask the user to clarify what they mean rather than guessing. List what the \
-            term could refer to if the context shows multiple matches.
+            things), ask the user to clarify what they mean rather than guessing.
             - If the question is general knowledge (not specific to the codebase), answer from \
-            your own knowledge and write (none) for Sources and Quotes.
+            your own knowledge and skip Sources and Quotes.
             """;
 
     /** One text box, comma-separated — a term per line would be a second way to say the same thing. */
